@@ -82,6 +82,8 @@ import readChangesets from "@changesets/read";
 
     await exec("printenv FAKE_TOKEN_2", []);
 
+    await exec("echo FAKE_TOKEN_2", []);
+
     if (publishScript) {
       console.log(
         "No changesets found, attempting to publish any unpublished packages to npm"
