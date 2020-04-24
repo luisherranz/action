@@ -60,6 +60,8 @@ import readChangesets from "@changesets/read";
 
   let publishScript = core.getInput("publish");
   let versionScript = core.getInput("version");
+  let afterMergeScript = core.getInput("afterMerge");
+
   core.setOutput('published', 'false');
   core.setOutput('publishedPackages', '[]');
 
@@ -160,6 +162,11 @@ import readChangesets from "@changesets/read";
     }
 
     return;
+  } 
+
+  if (!hasChangesets && afterMergeScript) {
+      let [afterMergeCommand, ...afterMergeArgs] = afterMergeScript.split(/\s+/);
+      await exec(afterMergeCommand, afterMergeArgs);
   }
 
   if (hasChangesets) {
