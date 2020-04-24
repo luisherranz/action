@@ -66,6 +66,9 @@ import readChangesets from "@changesets/read";
   core.setOutput("publishedPackages", "[]");
 
   if (!hasChangesets) {
+    console.log("It doesn't have changes");
+    console.log("afterMerge is" + afterMergeScript);
+
     if (!publishScript || !afterMergeScript) {
       console.log("No changesets found.");
       return;
