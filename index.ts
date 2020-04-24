@@ -74,7 +74,7 @@ import readChangesets from "@changesets/read";
       return;
     }
 
-    exec('echo "$FAKE_TOKEN"', [], {
+    exec("printenv NAME", [], {
       env: {
         FAKE_TOKEN: "fake-token"
       }
