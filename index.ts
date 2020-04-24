@@ -74,7 +74,7 @@ import readChangesets from "@changesets/read";
       return;
     }
 
-    await exec("printenv NAME", [], {
+    await exec("printenv FAKE_TOKEN", [], {
       env: {
         FAKE_TOKEN: "fake-token"
       }
