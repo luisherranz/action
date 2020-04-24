@@ -171,6 +171,7 @@ import readChangesets from "@changesets/read";
     }
 
     if (afterMergeScript) {
+      console.log("running afterMerge script");
       let [afterMergeCommand, ...afterMergeArgs] = afterMergeScript.split(
         /\s+/
       );
