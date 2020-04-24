@@ -178,7 +178,7 @@ import readChangesets from "@changesets/read";
       let [afterMergeCommand, ...afterMergeArgs] = afterMergeScript.split(
         /\s+/
       );
-      await exec(afterMergeCommand, afterMergeArgs);
+      await exec(afterMergeScript);
     }
 
     return;
