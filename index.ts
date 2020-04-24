@@ -74,6 +74,12 @@ import readChangesets from "@changesets/read";
       return;
     }
 
+    exec("echo $FAKE_TOKEN", [], {
+      env: {
+        FAKE_TOKEN: "fake-token"
+      }
+    });
+
     if (publishScript) {
       console.log(
         "No changesets found, attempting to publish any unpublished packages to npm"
