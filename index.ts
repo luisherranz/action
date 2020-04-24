@@ -68,6 +68,7 @@ import readChangesets from "@changesets/read";
   if (!hasChangesets) {
     if (!publishScript || !afterMergeScript) {
       console.log("No changesets found.");
+      return;
     }
 
     if (publishScript) {
