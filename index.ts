@@ -62,111 +62,121 @@ import readChangesets from "@changesets/read";
   let versionScript = core.getInput("version");
   let afterMergeScript = core.getInput("afterMerge");
 
-  core.setOutput('published', 'false');
-  core.setOutput('publishedPackages', '[]');
+  core.setOutput("published", "false");
+  core.setOutput("publishedPackages", "[]");
 
-  if (!hasChangesets && !publishScript) {
-    console.log("No changesets found");
-    return;
-  }
-  if (!hasChangesets && publishScript) {
-    console.log(
-      "No changesets found, attempting to publish any unpublished packages to npm"
-    );
-    let workspaces = await getWorkspaces({
-      tools: ["yarn", "bolt", "pnpm", "root"]
-    });
-
-    if (!workspaces) {
-      return core.setFailed("Could not find workspaces");
+  if (!hasChangesets) {
+    if (!publishScript || !afterMergeScript) {
+      console.log("No changesets found.");
     }
 
-    let workspacesByName = new Map(workspaces.map(x => [x.name, x]));
+    if (publishScript) {
+      console.log(
+        "No changesets found, attempting to publish any unpublished packages to npm"
+      );
+      let workspaces = await getWorkspaces({
+        tools: ["yarn", "bolt", "pnpm", "root"]
+      });
 
-    fs.writeFileSync(
-      `${process.env.HOME}/.npmrc`,
-      `//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`
-    );
-
-    let [publishCommand, ...publishArgs] = publishScript.split(/\s+/);
-
-    let changesetPublishOutput = await execWithOutput(
-      publishCommand,
-      publishArgs
-    );
-
-    await exec("git", ["pull", "origin", branch]);
-
-    await exec("git", ["push", "origin", `HEAD:${branch}`, "--tags"]);
-
-    let newTagRegex = /New tag:\s+(@[^/]+\/[^@]+|[^/]+)@([^\s]+)/;
-
-    let releasedWorkspaces: Workspace[] = [];
-
-    for (let line of changesetPublishOutput.stdout.split("\n")) {
-      let match = line.match(newTagRegex);
-      if (match === null) {
-        continue;
+      if (!workspaces) {
+        return core.setFailed("Could not find workspaces");
       }
-      let pkgName = match[1];
-      let workspace = workspacesByName.get(pkgName);
-      if (workspace === undefined) {
-        return core.setFailed(
-          "Workspace not found for " +
-            pkgName +
-            ". This is probably a bug in the action, please open an issue"
+
+      let workspacesByName = new Map(workspaces.map(x => [x.name, x]));
+
+      fs.writeFileSync(
+        `${process.env.HOME}/.npmrc`,
+        `//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`
+      );
+
+      let [publishCommand, ...publishArgs] = publishScript.split(/\s+/);
+
+      let changesetPublishOutput = await execWithOutput(
+        publishCommand,
+        publishArgs
+      );
+
+      await exec("git", ["pull", "origin", branch]);
+
+      await exec("git", ["push", "origin", `HEAD:${branch}`, "--tags"]);
+
+      let newTagRegex = /New tag:\s+(@[^/]+\/[^@]+|[^/]+)@([^\s]+)/;
+
+      let releasedWorkspaces: Workspace[] = [];
+
+      for (let line of changesetPublishOutput.stdout.split("\n")) {
+        let match = line.match(newTagRegex);
+        if (match === null) {
+          continue;
+        }
+        let pkgName = match[1];
+        let workspace = workspacesByName.get(pkgName);
+        if (workspace === undefined) {
+          return core.setFailed(
+            "Workspace not found for " +
+              pkgName +
+              ". This is probably a bug in the action, please open an issue"
+          );
+        }
+        releasedWorkspaces.push(workspace);
+      }
+
+      await Promise.all(
+        releasedWorkspaces.map(async workspace => {
+          try {
+            let changelogFileName = path.join(workspace.dir, "CHANGELOG.md");
+
+            let changelog = await fs.readFile(changelogFileName, "utf8");
+
+            let changelogEntry = getChangelogEntry(
+              changelog,
+              workspace.config.version
+            );
+            if (!changelogEntry) {
+              // we can find a changelog but not the entry for this version
+              // if this is true, something has probably gone wrong
+              return core.setFailed(
+                `Could not find changelog entry for ${workspace.name}@${workspace.config.version}`
+              );
+            }
+
+            await octokit.repos.createRelease({
+              tag_name: `${workspace.name}@${workspace.config.version}`,
+              body: changelogEntry.content,
+              prerelease: workspace.config.version.includes("-"),
+              ...github.context.repo
+            });
+          } catch (err) {
+            // if we can't find a changelog, the user has probably disabled changelogs
+            if (err.code !== "ENOENT") {
+              throw err;
+            }
+          }
+        })
+      );
+
+      if (releasedWorkspaces.length) {
+        core.setOutput("published", "true");
+        core.setOutput(
+          "publishedPackages",
+          JSON.stringify(
+            releasedWorkspaces.map(workspace => ({
+              name: workspace.name,
+              version: workspace.config.version
+            }))
+          )
         );
       }
-      releasedWorkspaces.push(workspace);
     }
 
-    await Promise.all(
-      releasedWorkspaces.map(async workspace => {
-        try {
-          let changelogFileName = path.join(workspace.dir, "CHANGELOG.md");
-
-          let changelog = await fs.readFile(changelogFileName, "utf8");
-
-          let changelogEntry = getChangelogEntry(
-            changelog,
-            workspace.config.version
-          );
-          if (!changelogEntry) {
-            // we can find a changelog but not the entry for this version
-            // if this is true, something has probably gone wrong
-            return core.setFailed(
-              `Could not find changelog entry for ${workspace.name}@${workspace.config.version}`
-            );
-          }
-
-          await octokit.repos.createRelease({
-            tag_name: `${workspace.name}@${workspace.config.version}`,
-            body: changelogEntry.content,
-            prerelease: workspace.config.version.includes("-"),
-            ...github.context.repo
-          });
-        } catch (err) {
-          // if we can't find a changelog, the user has probably disabled changelogs
-          if (err.code !== "ENOENT") {
-            throw err;
-          }
-        }
-      })
-    );
-
-    if (releasedWorkspaces.length) {
-      core.setOutput('published', 'true');
-      core.setOutput('publishedPackages', JSON.stringify(releasedWorkspaces.map(
-        workspace => ({name: workspace.name, version: workspace.config.version})
-      )));
+    if (afterMergeScript) {
+      let [afterMergeCommand, ...afterMergeArgs] = afterMergeScript.split(
+        /\s+/
+      );
+      await exec(afterMergeCommand, afterMergeArgs);
     }
 
     return;
-  } 
-
-  if (!hasChangesets && afterMergeScript) {
-      let [afterMergeCommand, ...afterMergeArgs] = afterMergeScript.split(/\s+/);
-      await exec(afterMergeCommand, afterMergeArgs);
   }
 
   if (hasChangesets) {
