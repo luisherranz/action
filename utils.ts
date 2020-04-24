@@ -117,7 +117,7 @@ export async function execWithOutput(
           myError += data.toString();
         }
       },
-
+      env: JSON.parse(JSON.stringify(process.env)),
       ...options
     }),
     stdout: myOutput,
